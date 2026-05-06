@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SheetOps Patch",
+  "description": "Schema for all SheetOps patch files. Every write to a Google Sheet MUST go through a patch file validated against this schema.",
+  "type": "object",
+  "required": ["operationId", "project", "reason", "operations"],
+  "additionalProperties": false,
+  "properties": {
+    "operationId": {
+      "type": "string",
+      "pattern": "^[0-9]{8}-[0-9]{6}-[a-z0-9\\-]+$",
+      "description": "Unique ID: YYYYMMDD-HHMMSS-short-description",
+      "examples": ["20250102-143015-fix-budget-totals"]
+    },
+    "project": {
+      "type": "string",
+      "description": "Must match the project folder name under <SHEETOPS_ROOT>/projects/"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Human-readable reason for this patch"
+    },
+    "requiresApproval": {
+      "type": "boolean",
+      "default": true,
+      "description": "Set false ONLY after explicit human approval is confirmed"
+    },
+    "expectedWorkbookHash": {
+      "type": "string",
+      "description": "Optional. Hash from the last snapshot. Patch will be rejected if current hash differs."
+    },
+    "backupRequired": {
+      "type": "boolean",
+      "default": true,
+      "description": "If true, agent_backupSpreadsheet is called before any writes"
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["type", "target"],
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["setValues", "appendRows", "clearRange", "deleteRows", "setFormula", "setNote", "setFormat"],
+            "description": "Operation type"
+          },
+          "target": {
+            "type": "object",
+            "description": "Range target. Prefer namedRange. Fall back to sheetName+a1.",
+            "properties": {
+              "namedRange": { "type": "string" },
+              "sheetName":  { "type": "string" },
+              "a1":         { "type": "string", "description": "A1 notation, e.g. A1:C5 or B2" }
+            },
+            "anyOf": [
+              { "required": ["namedRange"] },
+              { "required": ["sheetName", "a1"] }
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": { "type": "array" },
+            "description": "2-D array of values for setValues / appendRows"
+          },
+          "formulas": {
+            "type": "array",
+            "items": { "type": "array", "items": { "type": "string" } },
+            "description": "2-D array of formula strings for setFormula operations"
+          },
+          "notes": {
+            "type": "array",
+            "items": { "type": "array", "items": { "type": "string" } },
+            "description": "2-D array of note strings for setNote operations"
+          },
+          "startRow": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1-based row number for deleteRows"
+          },
+          "numRows": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of rows to delete"
+          },
+          "expectedHash": {
+            "type": "string",
+            "description": "SHA-256 hash of current range values. Required for any overwrite of existing data."
+          },
+          "allowFormulaOverwrite": {
+            "type": "boolean",
+            "default": false,
+            "description": "Must be explicitly true to overwrite cells containing formulas"
+          },
+          "allowHiddenSheet": {
+            "type": "boolean",
+            "default": false,
+            "description": "Must be explicitly true to write to hidden sheets"
+          },
+          "allowProtected": {
+            "type": "boolean",
+            "default": false,
+            "description": "Must be explicitly true to write to protected ranges"
+          },
+          "confirmDestructive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Must be explicitly true for clearRange and deleteRows"
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "operationId": "20250102-143015-update-q1-targets",
+      "project": "sheet_my_budget",
+      "reason": "Update Q1 sales targets approved in weekly review 2025-01-02",
+      "requiresApproval": false,
+      "backupRequired": true,
+      "operations": [
+        {
+          "type": "setValues",
+          "target": { "namedRange": "Q1Targets" },
+          "values": [[100000, 120000, 95000]],
+          "expectedHash": "abc123def456",
+          "allowFormulaOverwrite": false,
+          "confirmDestructive": false
+        }
+      ]
+    }
+  ]
+}

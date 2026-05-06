@@ -1,0 +1,39 @@
+{
+  "name": "sheetops",
+  "version": "1.0.0",
+  "description": "Production-grade local control plane for AI agents to safely read, write, and manage Google Sheets and Apps Script",
+  "private": false,
+  "main": "bin/sheetops.js",
+  "bin": {
+    "sheetops": "bin/sheetops.js"
+  },
+  "scripts": {
+    "start": "node bin/sheetops.js",
+    "init": "node bin/sheetops.js init"
+  },
+  "keywords": [
+    "google-sheets",
+    "apps-script",
+    "ai-agent",
+    "claude",
+    "mcp",
+    "automation",
+    "spreadsheet"
+  ],
+  "author": "Anneo22",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Anneo22/SheetOps.git"
+  },
+  "homepage": "https://github.com/Anneo22/SheetOps#readme",
+  "bugs": {
+    "url": "https://github.com/Anneo22/SheetOps/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "googleapis": "^171.4.0"
+  }
+}

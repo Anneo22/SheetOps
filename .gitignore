@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Per-user project data (contains spreadsheet IDs, tokens, personal data)
+projects/
+
+# Runtime logs
+logs/
+
+# User-specific config (contains spreadsheet IDs and registered projects)
+sheetops.config.json
+
+# OAuth credentials (NEVER commit)
+~/.sheetops-creds.json
+.sheetops-creds.json
+*-creds.json
+
+# Clasp credentials
+.clasprc.json
+
+# Plugin build artifact (binary zip)
+*.plugin
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test scripts
+test-*.sh
+check-*.sh
+*.sh
+
+# Temp files
+*.tmp
+*.bak
