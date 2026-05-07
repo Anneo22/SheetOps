@@ -87,7 +87,30 @@ Update `project.config.json`: set `agentOpsInstalled: true` and `status: "ready"
 
 ---
 
-## Part 2: Every Task on a Sheet
+## Part 2: Formula Awareness
+
+Formulas are first-class data, not an afterthought. A cell showing `£42,500` might be `=SUMIF(B:B,"Jan",C:C)`. The formula tells you how the sheet works; the value tells you only what it shows right now.
+
+`agent_readRange` returns both `values` and `formulas` for every cell. Always inspect both. The user should never have to ask "is there a formula behind this?" — you have the data, report it without being asked.
+
+Rules:
+
+- When reporting cell contents, lead with the formula if one exists. State what it references and what it derives.
+- Before writing to any cell, read the range first and check whether a formula is already there. Decide explicitly whether the patch replaces the formula or preserves it. Flag this to the user.
+- If a formula references another sheet, a named range, or an external source (`IMPORTRANGE`, `QUERY`, `GOOGLEFINANCE`, etc.), say so explicitly.
+- Formulas are valid values in a patch. Write them as strings starting with `=`:
+
+```json
+{
+  "type": "setValues",
+  "target": { "namedRange": "ProfitCalc" },
+  "values": [["=C2-D2", "=E2/C2*100"]]
+}
+```
+
+When creating a Sheet with `create-sheet`, prefer formulas over static values wherever data should update automatically. A well-built Sheet uses formulas to derive totals, rates, and summaries — not hardcoded numbers the user has to maintain by hand.
+
+## Part 3: Every Task on a Sheet
 
 Follow this checklist for every task.
 
@@ -96,7 +119,7 @@ Follow this checklist for every task.
 - Pull latest: `sheetops pull-script --project NAME`
 - Check git: `cd appsscript && git status`
 - Snapshot: `sheetops snapshot --project NAME`
-- Read only the ranges needed
+- Read the ranges needed — check both values AND formulas for every target cell
 
 **Planning**
 
@@ -133,7 +156,7 @@ Follow this checklist for every task.
 
 ---
 
-## Part 3: Safety Limits
+## Part 4: Safety Limits
 
 These cannot be overridden by task context.
 
@@ -151,7 +174,7 @@ These cannot be overridden by task context.
 
 ---
 
-## Part 4: Patch File Naming
+## Part 5: Patch File Naming
 
 ```
 ops/patches/YYYYMMDD-HHMMSS-short-description.json
@@ -163,7 +186,7 @@ After successful application, patches move to `ops/patches/applied/`.
 
 ---
 
-## Part 5: Rollback
+## Part 6: Rollback
 
 **Sheet data**
 
@@ -182,7 +205,7 @@ node bin/sheetops.js push-script --project PROJECT_NAME --confirmed
 
 ---
 
-## Part 6: Pre-flight Checklist
+## Part 7: Pre-flight Checklist
 
 Run before any real work on a new Sheet:
 

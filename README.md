@@ -155,6 +155,20 @@ node bin/sheetops.js apply-patch --project myproject --patch ops/patches/fix.jso
 }
 ```
 
+## Formula support
+
+Every read returns both the displayed value and the underlying formula for each cell. Formulas are also valid as write targets — pass them as strings starting with `=` in any patch:
+
+```json
+{
+  "type": "setValues",
+  "target": { "namedRange": "ProfitCalc" },
+  "values": [["=C2-D2", "=E2/C2*100"]]
+}
+```
+
+When building a Sheet from scratch with `create-sheet`, use formulas in the `data` array wherever values should derive automatically from other cells.
+
 ## Patch format
 
 ```json
@@ -187,9 +201,9 @@ SheetOps installs a bridge script into each bound Apps Script project. It handle
 |----------|-------------|
 | `agent_healthcheck()` | Metadata, sheet list, named ranges |
 | `agent_snapshotWorkbook()` | Full workbook snapshot |
-| `agent_readRange(p)` | Read values, formulas, and notes |
+| `agent_readRange(p)` | Read values, formulas, and notes — returns both layers for every cell |
 | `agent_writeRangeDryRun(p)` | Preview a write without applying it |
-| `agent_writeRange(p)` | Write with lock, hash check, and log |
+| `agent_writeRange(p)` | Write with lock, hash check, and log — accepts formula strings (`=SUM(...)`) |
 | `agent_appendRows(p)` | Append rows |
 | `agent_clearRange(p)` | Clear range (requires `confirmDestructive`) |
 | `agent_deleteRows(p)` | Delete rows (requires `confirmDestructive` and backup) |
