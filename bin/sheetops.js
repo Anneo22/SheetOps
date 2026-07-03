@@ -153,6 +153,29 @@ function getSpreadsheetId(projectName) {
   return cfg.spreadsheetId;
 }
 
+/** Deep-merge b over a (objects only; arrays/scalars in b replace a). */
+function deepMerge(a, b) {
+  const out = { ...a };
+  for (const k of Object.keys(b || {})) {
+    if (b[k] && typeof b[k] === "object" && !Array.isArray(b[k]) &&
+        a[k] && typeof a[k] === "object" && !Array.isArray(a[k])) {
+      out[k] = deepMerge(a[k], b[k]);
+    } else out[k] = b[k];
+  }
+  return out;
+}
+
+/** Load design tokens: repo theme.json, deep-merged with projects/<name>/theme.json if present. */
+function loadTheme(projectName) {
+  const base = path.join(ROOT, "theme.json");
+  let theme = fs.existsSync(base) ? readJson(base) : {};
+  if (projectName) {
+    const override = path.join(projectDir(projectName), "theme.json");
+    if (fs.existsSync(override)) theme = deepMerge(theme, readJson(override));
+  }
+  return theme;
+}
+
 // ─── Commands ─────────────────────────────────────────────────────────────────
 
 /** auth — multi-account OAuth management */
@@ -1164,6 +1187,91 @@ async function cmdFormatRange(args) {
   ok(`Formatting applied.`);
 }
 
+/** autofit — auto-size columns (+ row heights) to content, with a max-width cap + wrap */
+async function cmdAutofit(args) {
+  hdr("SheetOps autofit");
+  const A = api();
+  const projectName   = requireProject(args);
+  const spreadsheetId = getSpreadsheetId(projectName);
+  const sheetTitle = args["sheet"];
+  if (!sheetTitle) { err("--sheet <name> required"); process.exit(1); }
+  const theme = loadTheme(projectName);
+  const af = theme.autofit || {};
+  const maxWidth = args["max-width"] !== undefined ? parseInt(args["max-width"]) : af.maxColWidth;
+  const minWidth = args["min-width"] !== undefined ? parseInt(args["min-width"]) : af.minColWidth;
+  const wrap     = args["no-wrap"] ? false : (af.wrapOverCap !== false);
+  info(`Auto-fitting columns on ${projectName}!${sheetTitle} (max ${maxWidth || "∞"}px, min ${minWidth || "—"}px, wrap ${wrap})...`);
+  const r = await A.autofit(spreadsheetId, { sheetTitle, maxWidth, minWidth, wrap });
+  ok(`Columns resized. ${r.capped.length} capped${r.rowsResized ? ", row heights refit" : ""}.`);
+  info(`Widths: ${JSON.stringify(r.before)} → ${JSON.stringify(r.after)}`);
+}
+
+/** style-table / beautify — one-shot theme styling of a tabular range */
+async function cmdStyleTable(args) {
+  hdr("SheetOps style-table");
+  const A = api();
+  const projectName   = requireProject(args);
+  const spreadsheetId = getSpreadsheetId(projectName);
+  const sheetTitle = args["sheet"];
+  if (!sheetTitle) { err("--sheet <name> required"); process.exit(1); }
+  const theme = loadTheme(projectName);
+  const opts = {
+    sheetTitle, theme,
+    range:      args["range"] || args["a1"] || undefined,
+    headerRows: args["header-rows"] !== undefined ? parseInt(args["header-rows"]) : 1,
+    freeze:     args["no-freeze"]         ? false : undefined,
+    banding:    args["no-banding"]        ? false : undefined,
+    borders:    args["no-borders"]        ? false : undefined,
+    autofit:    args["no-autofit"]        ? false : undefined,
+    inferNumberFormats: args["no-number-formats"] ? false : undefined
+  };
+  info(`Styling ${projectName}!${sheetTitle}${opts.range ? "!" + opts.range : " (used range)"} from theme...`);
+  const r = await A.styleTable(spreadsheetId, opts);
+  ok(`Styled ${r.numRows}×${r.numCols}. Header ${r.frozen ? "frozen" : "styled"}${r.banded ? ", banded" : ""}${r.autofit ? ", autofit" : ""}.`);
+  info("Column types: " + r.columnTypes.map(c => `${c.column}:${c.type}`).join("  "));
+}
+
+/** add-chart — embed a line/column/bar/pie chart from a data range */
+async function cmdAddChart(args) {
+  hdr("SheetOps add-chart");
+  const A = api();
+  const projectName   = requireProject(args);
+  const spreadsheetId = getSpreadsheetId(projectName);
+  const sheetTitle = args["sheet"];
+  const dataRange  = args["data-range"] || args["range"];
+  if (!sheetTitle || !dataRange) { err("--sheet <name> and --data-range <A1:C13> required"); process.exit(1); }
+  const theme = loadTheme(projectName);
+  info(`Adding ${args["type"] || "line"} chart on ${projectName}!${sheetTitle} from ${dataRange}...`);
+  const r = await A.addChart(spreadsheetId, {
+    sheetTitle, dataRange, theme,
+    type:  args["type"]  || "line",
+    title: args["title"] || "",
+    anchor: args["anchor"] || "H2",
+    targetSheetTitle: args["target-sheet"] || undefined,
+    newSheet: !!args["new-sheet"]
+  });
+  ok(`Chart added: ${r.type} "${r.title}" (chartId ${r.chartId}) from ${dataRange}.`);
+}
+
+/** conditional-format — add a conditional-formatting rule (negative-red / thresholds / heatmap) */
+async function cmdConditionalFormat(args) {
+  hdr("SheetOps conditional-format");
+  const A = api();
+  const projectName   = requireProject(args);
+  const spreadsheetId = getSpreadsheetId(projectName);
+  const sheetTitle = args["sheet"];
+  const range      = args["a1"] || args["range"];
+  if (!sheetTitle || !range) { err("--sheet <name> and --a1 <range> required"); process.exit(1); }
+  const theme = loadTheme(projectName);
+  const r = await A.conditionalFormat(spreadsheetId, {
+    sheetTitle, range, theme,
+    rule:  args["rule"] || "negative-red",
+    value: args["value"],
+    color: args["color"]
+  });
+  ok(`Conditional rule '${r.rule}' applied to ${sheetTitle}!${range}.`);
+}
+
 /** add-tab — add a new sheet tab */
 async function cmdAddTab(args) {
   hdr("SheetOps add-tab");
@@ -1270,6 +1378,8 @@ const asyncCmds = { auth: cmdAuth, init: cmdInit, "add-sheet": cmdAddSheet,
   validate: cmdValidate, "log-summary": cmdLogSummary, "run-script": cmdRunScript,
   stats: cmdStats, export: cmdExport, find: cmdFind, "list-functions": cmdListFunctions,
   "create-sheet": cmdCreateSheet, "format-range": cmdFormatRange,
+  autofit: cmdAutofit, "style-table": cmdStyleTable, beautify: cmdStyleTable,
+  "add-chart": cmdAddChart, "conditional-format": cmdConditionalFormat,
   "add-tab": cmdAddTab, "delete-tab": cmdDeleteTab, "rename-tab": cmdRenameTab,
   "compare-snapshots": cmdCompareSnapshots };
 
@@ -1341,6 +1451,20 @@ ${C.bold}Creation & formatting:${C.reset}
   rename-tab    --project --from <n> --to   Rename a sheet tab
   compare-snapshots --project               Diff the two most recent snapshots
                 [--snap1 <file>] [--snap2]  or specify snapshot files explicitly
+
+${C.bold}Presentation & visualization:${C.reset} (theme-driven — reads theme.json)
+  autofit       --project --sheet <name>    Fit column widths (+ row heights) to content
+                [--max-width N] [--min-width N] [--no-wrap]
+  style-table   --project --sheet <name>    One-shot beautify: header + freeze + banding
+   (beautify)   [--range A1:E13]            + borders + alignment + number-format inference
+                [--header-rows N]           + autofit, all from the theme
+                [--no-banding] [--no-freeze] [--no-borders] [--no-autofit] [--no-number-formats]
+  add-chart     --project --sheet <name>    Embed a chart from a data range (col 1 = labels)
+                --data-range A1:C13         [--type line|column|bar|area|scatter|pie]
+                [--title <t>] [--anchor H2] [--target-sheet <name>] [--new-sheet]
+  conditional-format --project --sheet      Add a conditional rule
+                --a1 <range> [--rule negative-red|less-than|greater-than|heatmap]
+                [--value N] [--color #hex]
 
 ${C.bold}Account management:${C.reset}
   auth                          Add / re-auth an account (opens browser)

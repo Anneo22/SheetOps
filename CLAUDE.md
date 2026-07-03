@@ -1,3 +1,6 @@
+---
+Modified: 2026-07-03T09:59
+---
 # SheetOps — Agent Operating Protocol
 
 This file governs every agent session that interacts with Google Sheets via SheetOps. It applies to Claude, Codex, Cursor, and any other agent with access to this directory.
@@ -144,6 +147,7 @@ Follow this checklist for every task.
 - Present plan and dry-run summary, then wait for explicit approval
 - Apply: `node bin/sheetops.js apply-patch --project NAME --patch ops/patches/FILE.json --confirmed`
 - Validate: `node bin/sheetops.js validate --project NAME`
+- **Presentation pass (Part 9):** after any data write, run `style-table` on the affected tab so nothing ships raw. Add a chart if the data is time-series or categorical; flag negatives/thresholds. Never leave a 100px-default, unformatted table.
 - Commit local changes
 - Report exactly what changed
 
@@ -234,6 +238,10 @@ node bin/sheetops.js push-script --project PROJECT_NAME --confirmed
 | `run-script --project --function` | Execute an Apps Script function |
 | `list-functions --project` | List Apps Script functions |
 | `format-range --project` | Apply cell formatting via batchUpdate |
+| `autofit --project --sheet` | Fit column widths + row heights to content (max-width cap + wrap) |
+| `style-table --project --sheet` | One-shot beautify from the theme (alias `beautify`) |
+| `add-chart --project --sheet --data-range` | Embed a line/column/bar/pie chart |
+| `conditional-format --project --sheet --a1` | Add a conditional-format rule (negatives/thresholds/heatmap) |
 | `add-tab --project --name` | Add a sheet tab |
 | `delete-tab --project --name` | Delete a sheet tab |
 | `rename-tab --project --from --to` | Rename a sheet tab |
@@ -269,3 +277,40 @@ Run before any real work on a new Sheet:
 - `log-summary` shows recent log entries
 - Rollback instructions are documented in the project's notes
 - `project.config.json` shows `status: "ready"`
+
+---
+
+## Part 9: Presentation & Visualization
+
+Every sheet SheetOps builds or touches comes out well-formatted **by default**. The operator should never hand-style a tab. Styling is theme-driven: you *apply the theme*, you never pick colours per sheet.
+
+### The theme (design tokens)
+
+`theme.json` at the repo root holds the design tokens — title/subtitle/header colours, banding, header border, alignment rules, standard number formats, autofit caps, chart palette, conditional-format colours. A project may override any token with `projects/<name>/theme.json` (deep-merged over the repo default).
+
+Never hardcode a colour in a patch or command. If a sheet needs a different look, change the **token**, not the call. To match an existing workbook's house style, read its dashboards first and encode the palette as a project override, then apply it everywhere — workbook consistency beats per-sheet invention.
+
+Seed palette (formalised from the finance workbook; contrast- and colourblind-checked): navy `#1b2f5a` titles, `#d0e4f7` subtitle strip, `#cfe2f3` header band, white/`#eef4fb` banding, currency `£#,##0.00`, Okabe-Ito chart colours.
+
+### Commands (see `--help` for flags)
+
+- `autofit --project P --sheet S` — fit column widths + row heights to content; cap at `maxColWidth`, wrap over-cap columns.
+- `style-table --project P --sheet S` (alias `beautify`) — one-shot: header treatment + freeze + banding + header border + per-column alignment + number-format inference + autofit, all from the theme.
+- `add-chart --project P --sheet S --data-range A1:C13 --type line|column|bar|pie` — embed a chart (first column = labels).
+- `conditional-format --project P --sheet S --a1 R --rule negative-red|less-than|greater-than|heatmap`.
+
+### Post-write presentation checklist
+
+After ANY data write (`create-sheet`, `apply-patch`, append, manual write), run a presentation pass before declaring done:
+
+1. **Autofit** — `style-table` (or at least `autofit`) so nothing is clipped and no column is absurdly wide. Never leave 100px-default columns beside long text.
+2. **Number formats** — currency / percent / date / integer columns consistent. No raw `1400` beside `£1,400.00`. `style-table` infers these; correct any misread with `format-range --number-format`.
+3. **Header** — bold, filled, frozen, centered (`style-table` does this).
+4. **Alignment** — numbers right, text left, dates/codes centered (`style-table` does this).
+5. **Chart?** — time series → line; category breakdown → column/bar (sorted by value, axis from zero); pie only for 2-3 parts of a whole; skip for lookup tables. Direct-label, ≤1 accent colour, no 3D.
+6. **Conditional formatting?** — negatives in red, thresholds flagged, heatmap for a matrix of magnitudes. Sparingly.
+7. **Consistency** — match the workbook's existing house style, not a fresh look per tab.
+
+**Chart chooser:** time/trend → line · compare categories → column (few) or bar (many / long labels, sorted) · parts of a whole (2-3) → pie, else bar · relationship → scatter · per-row inline trend → `=SPARKLINE` · exact lookups / many rows / mixed units → leave as a table.
+
+Number-format inference is heuristic (header keywords + value sampling). Verify it on the readback and override per column when it guesses wrong (e.g. an ID column that looks numeric but must stay plain).
