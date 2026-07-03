@@ -1047,8 +1047,23 @@ async function cmdFormatRange(args) {
   const projectName = requireProject(args);
   const spreadsheetId = getSpreadsheetId(projectName);
 
-  if (!args["requests"] && !args["bold"] && !args["bg"] && !args["freeze-rows"]) {
-    err("Provide --requests <json-array> or shorthand flags (--bold, --bg #hex, --freeze-rows N)");
+  // Any one recognised shorthand flag (or raw --requests) is enough to proceed.
+  const CELL_FLAGS = ["bold", "italic", "bg", "fg", "font-size", "align", "number-format"];
+  const wantsCellFormat = CELL_FLAGS.some(k => args[k] !== undefined);
+  const wantsFreeze     = args["freeze-rows"] !== undefined || args["freeze-cols"] !== undefined;
+  if (!args["requests"] && !wantsCellFormat && !wantsFreeze) {
+    err('Provide --requests <json-array> or shorthand flags ' +
+        '(--bold, --italic, --bg #hex, --fg #hex, --align left|center|right, --font-size N, ' +
+        '--number-format "pattern" [--number-type TYPE], --freeze-rows N, --freeze-cols N)');
+    process.exit(1);
+  }
+  // Cell-format flags need a target range.
+  if (wantsCellFormat && !(args["sheet"] && args["a1"])) {
+    err("Cell formatting flags (--bold, --italic, --bg, --fg, --font-size, --align, --number-format) require --sheet <name> and --a1 <range>.");
+    process.exit(1);
+  }
+  if (args["number-format"] === true) {
+    err('--number-format requires a pattern value, e.g. --number-format "£#,##0.00"');
     process.exit(1);
   }
 
@@ -1060,50 +1075,71 @@ async function cmdFormatRange(args) {
     requests.push(...(Array.isArray(raw) ? raw : [raw]));
   }
 
-  // Shorthand: --sheet --a1 --bold --bg --fg --font-size --freeze-rows --freeze-cols --number-format
-  if (args["sheet"] && args["a1"]) {
-    const sheetsRes = await google.sheets({ version: "v4", auth: A.getOAuth2Client() })
-      .spreadsheets.get({ spreadsheetId, fields: "sheets.properties" });
-    const found = sheetsRes.data.sheets.find(s => s.properties.title === args["sheet"]);
-    if (!found) { err(`Sheet not found: ${args["sheet"]}`); process.exit(1); }
-    const sheetId = found.properties.sheetId;
+  // Local helpers (no direct googleapis dependency — this module never imports `google`).
+  const hexToColor = (hex) => {
+    const h = (hex || "").replace("#", "").padEnd(6, "0");
+    return { red: parseInt(h.substring(0,2),16)/255, green: parseInt(h.substring(2,4),16)/255, blue: parseInt(h.substring(4,6),16)/255 };
+  };
+  // Pick a numberFormat `type` from an explicit --number-type, else infer from the pattern.
+  const numberType = (pattern, explicit) => {
+    if (explicit && explicit !== true) return String(explicit).toUpperCase();
+    const p = pattern || "";
+    if (/%/.test(p))              return "PERCENT";
+    if (/[£$€¥₹]|\[\$/.test(p))   return "CURRENCY";
+    if (/[eE]\+?0/.test(p))       return "SCIENTIFIC";
+    return "NUMBER";
+  };
 
-    // Parse a1 range
+  // Resolve sheet metadata once, via the lib (getSpreadsheetMeta uses the authed client internally).
+  let meta = null;
+  if ((args["sheet"] && args["a1"]) || wantsFreeze) meta = await A.getSpreadsheetMeta(spreadsheetId);
+  const sheetIdByTitle = (title) => {
+    const s = (meta.sheets || []).find(x => x.properties.title === title);
+    return s ? s.properties.sheetId : null;
+  };
+
+  // Shorthand cell formatting: --sheet --a1 + --bold/--italic/--bg/--fg/--font-size/--align/--number-format
+  if (args["sheet"] && args["a1"]) {
+    const sheetId = sheetIdByTitle(args["sheet"]);
+    if (sheetId === null) { err(`Sheet not found: ${args["sheet"]}`); process.exit(1); }
+
+    // Parse the A1 range → GridRange. A single cell ("A1") maps to exactly that cell;
+    // a block ("A1:D10") maps to the block. (Previously a single cell was left open-ended,
+    // which formatted the whole sheet from that corner.)
     const a1 = args["a1"];
     const startMatch = a1.match(/^([A-Z]+)(\d+)/i);
     const endMatch   = a1.match(/:([A-Z]+)(\d+)/i);
     const colToIdx   = c => c.toUpperCase().split("").reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+    const startCol = startMatch ? colToIdx(startMatch[1]) : 0;
+    const startRow = startMatch ? parseInt(startMatch[2]) - 1 : 0;
     const gr = {
       sheetId,
-      startColumnIndex: startMatch ? colToIdx(startMatch[1]) : 0,
-      startRowIndex:    startMatch ? parseInt(startMatch[2]) - 1 : 0,
-      endColumnIndex:   endMatch   ? colToIdx(endMatch[1]) + 1 : undefined,
-      endRowIndex:      endMatch   ? parseInt(endMatch[2])      : undefined
+      startColumnIndex: startCol,
+      startRowIndex:    startRow,
+      endColumnIndex:   endMatch ? colToIdx(endMatch[1]) + 1 : (startMatch ? startCol + 1 : undefined),
+      endRowIndex:      endMatch ? parseInt(endMatch[2])     : (startMatch ? startRow + 1 : undefined)
     };
 
     const cellFmt = { textFormat: {} };
-    let fields = [];
+    const fields = [];
     if (args["bold"] !== undefined)    { cellFmt.textFormat.bold     = args["bold"] !== "false"; fields.push("userEnteredFormat.textFormat.bold"); }
     if (args["italic"] !== undefined)  { cellFmt.textFormat.italic   = args["italic"] !== "false"; fields.push("userEnteredFormat.textFormat.italic"); }
     if (args["font-size"])             { cellFmt.textFormat.fontSize  = parseInt(args["font-size"]); fields.push("userEnteredFormat.textFormat.fontSize"); }
-    if (args["fg"])                    { cellFmt.textFormat.foregroundColor = _hexToColor(args["fg"]); fields.push("userEnteredFormat.textFormat.foregroundColor"); }
-    if (args["bg"])                    { cellFmt.backgroundColor     = _hexToColor(args["bg"]); fields.push("userEnteredFormat.backgroundColor"); }
+    if (args["fg"])                    { cellFmt.textFormat.foregroundColor = hexToColor(args["fg"]); fields.push("userEnteredFormat.textFormat.foregroundColor"); }
+    if (args["bg"])                    { cellFmt.backgroundColor     = hexToColor(args["bg"]); fields.push("userEnteredFormat.backgroundColor"); }
     if (args["align"])                 { cellFmt.horizontalAlignment = args["align"].toUpperCase(); fields.push("userEnteredFormat.horizontalAlignment"); }
-    if (args["number-format"])         { cellFmt.numberFormat        = { type: "NUMBER", pattern: args["number-format"] }; fields.push("userEnteredFormat.numberFormat"); }
-
-    function _hexToColor(hex) {
-      const h = (hex || "").replace("#", "").padEnd(6, "0");
-      return { red: parseInt(h.substring(0,2),16)/255, green: parseInt(h.substring(2,4),16)/255, blue: parseInt(h.substring(4,6),16)/255 };
+    if (args["number-format"] !== undefined) {
+      cellFmt.numberFormat = { type: numberType(args["number-format"], args["number-type"]), pattern: args["number-format"] };
+      fields.push("userEnteredFormat.numberFormat");
     }
 
     if (fields.length) requests.push({ repeatCell: { range: gr, cell: { userEnteredFormat: cellFmt }, fields: fields.join(",") } });
   }
 
-  if (args["freeze-rows"] !== undefined || args["freeze-cols"] !== undefined) {
-    const sheetsRes = await google.sheets({ version: "v4", auth: A.getOAuth2Client() })
-      .spreadsheets.get({ spreadsheetId, fields: "sheets.properties" });
-    const found = sheetsRes.data.sheets.find(s => s.properties.title === (args["sheet"] || sheetsRes.data.sheets[0].properties.title));
-    const sheetId = found ? found.properties.sheetId : 0;
+  if (wantsFreeze) {
+    const title   = args["sheet"] || (meta.sheets[0] && meta.sheets[0].properties.title);
+    const resolved = title ? sheetIdByTitle(title) : null;
+    const sheetId  = resolved !== null ? resolved : (meta.sheets[0] ? meta.sheets[0].properties.sheetId : 0);
     requests.push({
       updateSheetProperties: {
         properties: {
@@ -1291,9 +1327,12 @@ ${C.bold}Creation & formatting:${C.reset}
                 [--create-folder]           Create folder if not found
                 [--register] [--name <n>]   Register as a SheetOps project
   format-range  --project --sheet --a1      Apply formatting to a range
-                [--bold] [--bg #hex]        Quick flags
+                [--bold] [--italic] [--bg #hex]   Quick flags
                 [--fg #hex] [--align left|center|right]
-                [--font-size N] [--number-format "pattern"]
+                [--font-size N]
+                [--number-format "pattern"] [--number-type TYPE]
+                                            TYPE inferred from pattern if omitted
+                                            (CURRENCY/PERCENT/SCIENTIFIC/NUMBER)
                 [--freeze-rows N] [--freeze-cols N]
                 [--requests <json-array>]   Raw batchUpdate requests
   add-tab       --project --name <n>        Add a new sheet tab
