@@ -1272,6 +1272,60 @@ async function cmdConditionalFormat(args) {
   ok(`Conditional rule '${r.rule}' applied to ${sheetTitle}!${range}.`);
 }
 
+/** add-title — prepend a title band (+ optional subtitle) above the table */
+async function cmdAddTitle(args) {
+  hdr("SheetOps add-title");
+  const A = api();
+  const projectName   = requireProject(args);
+  const spreadsheetId = getSpreadsheetId(projectName);
+  const sheetTitle = args["sheet"];
+  const title      = args["title"];
+  if (!sheetTitle || !title) { err('--sheet <name> and --title "text" required'); process.exit(1); }
+  const theme = loadTheme(projectName);
+  info(`Adding title band to ${projectName}!${sheetTitle}...`);
+  const r = await A.addTitle(spreadsheetId, {
+    sheetTitle, title, theme,
+    subtitle: (args["subtitle"] && args["subtitle"] !== true) ? args["subtitle"] : undefined,
+    width:    args["width"]
+  });
+  ok(`Title band added (${r.bandRows} row${r.bandRows > 1 ? "s" : ""}, span ${r.width} cols, frozen ${r.frozenRowCount}).`);
+}
+
+/** sparkline — inline =SPARKLINE per row from a source block */
+async function cmdSparkline(args) {
+  hdr("SheetOps sparkline");
+  const A = api();
+  const projectName   = requireProject(args);
+  const spreadsheetId = getSpreadsheetId(projectName);
+  const sheetTitle = args["sheet"];
+  const sourceRange = args["source"];
+  const targetCol   = args["target"];
+  if (!sheetTitle || !sourceRange || !targetCol) { err("--sheet <name>, --source <B2:M13> and --target <col letter> required"); process.exit(1); }
+  const theme = loadTheme(projectName);
+  const r = await A.addSparklines(spreadsheetId, {
+    sheetTitle, sourceRange, targetCol, theme,
+    type:     args["type"],
+    color:    args["color"],
+    negColor: args["neg-color"]
+  });
+  ok(`Wrote ${r.count} ${r.type} sparkline(s) to ${r.targetRange}.`);
+}
+
+/** mark-cells — style input (literal) vs computed (formula) cells */
+async function cmdMarkCells(args) {
+  hdr("SheetOps mark-cells");
+  const A = api();
+  const projectName   = requireProject(args);
+  const spreadsheetId = getSpreadsheetId(projectName);
+  const sheetTitle = args["sheet"];
+  const range      = args["a1"] || args["range"];
+  if (!sheetTitle || !range) { err("--sheet <name> and --a1 <range> required"); process.exit(1); }
+  const theme = loadTheme(projectName);
+  info(`Marking input vs computed cells in ${projectName}!${sheetTitle}!${range}...`);
+  const r = await A.markInputVsComputed(spreadsheetId, { sheetTitle, range, theme });
+  ok(`Marked ${r.input} input + ${r.computed} computed cell(s).`);
+}
+
 /** add-tab — add a new sheet tab */
 async function cmdAddTab(args) {
   hdr("SheetOps add-tab");
@@ -1380,6 +1434,7 @@ const asyncCmds = { auth: cmdAuth, init: cmdInit, "add-sheet": cmdAddSheet,
   "create-sheet": cmdCreateSheet, "format-range": cmdFormatRange,
   autofit: cmdAutofit, "style-table": cmdStyleTable, beautify: cmdStyleTable,
   "add-chart": cmdAddChart, "conditional-format": cmdConditionalFormat,
+  "add-title": cmdAddTitle, sparkline: cmdSparkline, "mark-cells": cmdMarkCells,
   "add-tab": cmdAddTab, "delete-tab": cmdDeleteTab, "rename-tab": cmdRenameTab,
   "compare-snapshots": cmdCompareSnapshots };
 
@@ -1465,6 +1520,13 @@ ${C.bold}Presentation & visualization:${C.reset} (theme-driven — reads theme.j
   conditional-format --project --sheet      Add a conditional rule
                 --a1 <range> [--rule negative-red|less-than|greater-than|heatmap]
                 [--value N] [--color #hex]
+  add-title     --project --sheet <name>    Prepend a navy title band (+ subtitle)
+                --title "text" [--subtitle "text"] [--width N]
+  sparkline     --project --sheet <name>    Inline =SPARKLINE per row
+                --source B2:M13 --target N   [--type line|column|bar|winloss]
+                [--color #hex] [--neg-color #hex]
+  mark-cells    --project --sheet <name>    Mark input (literal) vs computed (formula) cells
+                --a1 <range>
 
 ${C.bold}Account management:${C.reset}
   auth                          Add / re-auth an account (opens browser)

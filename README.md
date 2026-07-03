@@ -1,278 +1,101 @@
+---
+Modified: 2026-07-03T10:40
+---
 # SheetOps
 
-A local control plane for AI agents working with Google Sheets. Every write goes through a patch file, a dry-run, and a backup before anything touches live data. Apps Script projects are pulled, diffed, and pushed via the CLI. No browser automation, no guesswork.
+A local control plane for AI agents working with Google Sheets. Reads and writes go through the Sheets API, never browser automation. Every write is gated by a patch, a dry-run, and a backup. And every sheet it builds or touches comes out **well-formatted by default** from a single design theme.
 
-## Features
+![A table styled by SheetOps: navy title band, formatted currency and percent columns, a margin heatmap, and a line chart](docs/showcase.png)
 
-- Patch-based writes with dry-run preview, hash verification, and backup gate
-- Apps Script pull, diff, push, and execution via the Execution API
-- Sheet creation from a JSON schema: tabs, headers, formulas, colors, named ranges, conditional formatting
-- Workbook snapshots and structural diff between any two snapshots
-- Multi-account OAuth with instant account switching
-- Every operation logged to `__AGENT_OPS_LOG`, a hidden sheet inside each workbook
-
-## Requirements
-
-- Node.js 18 or later
-- [clasp](https://github.com/google/clasp): `npm install -g @google/clasp`
-- A Google Cloud Platform project with the Sheets API, Drive API, and Apps Script API enabled
-- OAuth 2.0 Desktop app credentials from that GCP project
-
-## Installation
+That whole layout is four commands, no manual styling:
 
 ```bash
-git clone https://github.com/Anneo22/SheetOps.git
-cd SheetOps
-npm install
+node bin/sheetops.js style-table  --project acme --sheet Jan
+node bin/sheetops.js add-chart     --project acme --sheet Jan --data-range A1:C7 --type line --title "Revenue vs Expenses"
+node bin/sheetops.js conditional-format --project acme --sheet Jan --a1 D2:D7 --rule heatmap
+node bin/sheetops.js add-title     --project acme --sheet Jan --title "2026 Performance" --subtitle "Monthly revenue, expenses & margin"
 ```
 
-## Setup
+## What it does
 
-### 1. Create a GCP project and OAuth credentials
+- **Safe writes.** Patch file, dry-run preview, hash check, and Drive backup before anything touches live data. Over-100-cell, formula-overwrite, hidden-sheet, and destructive writes each need an explicit flag.
+- **Presentation, automatic.** One command styles a raw table: header treatment, freeze, banding, borders, per-column alignment, and number-format inference (it detects currency / percent / date / integer columns). Plus charts, sparklines, conditional formatting, title bands, and column/row autofit.
+- **Apps Script.** Pull, diff, push, and execute bound scripts via clasp and the Execution API.
+- **Multi-account OAuth**, workbook snapshots with structural diff, and an audit log in every workbook.
 
-Follow [SETUP.md](SETUP.md) for a full walkthrough. The short version:
-
-1. Create a project at [console.cloud.google.com](https://console.cloud.google.com/)
-2. Enable the Google Sheets API, Google Drive API, and Apps Script API
-3. Go to APIs & Services > Credentials > Create Credentials > OAuth client ID
-4. Choose Desktop app and note the `client_id` and `client_secret`
-
-### 2. Authenticate
+## Quick start
 
 ```bash
-node bin/sheetops.js auth \
-  --client-id YOUR_CLIENT_ID \
-  --client-secret YOUR_CLIENT_SECRET
-```
+git clone https://github.com/Anneo22/SheetOps.git && cd SheetOps && npm install
 
-A browser window opens for Google sign-in. Credentials go to `~/.sheetops-creds.json`, never to git.
-
-### 3. Verify
-
-```bash
+# One-time: OAuth desktop credentials from a GCP project (Sheets + Drive + Apps Script APIs). See SETUP.md.
+node bin/sheetops.js auth --client-id YOUR_ID --client-secret YOUR_SECRET
 node bin/sheetops.js init
+
+# Connect a sheet and style it
+node bin/sheetops.js add-sheet --url "https://docs.google.com/spreadsheets/d/YOUR_ID/edit" --name acme
+node bin/sheetops.js style-table --project acme --sheet Sheet1
 ```
 
-## Usage
+## Presentation layer
 
-### Connect an existing Sheet
+Styling is **theme-driven**: you apply the theme, you never pick colours per sheet. `theme.json` at the repo root holds the design tokens; a project overrides any of them with `projects/<name>/theme.json` (deep-merged).
 
-```bash
-node bin/sheetops.js add-sheet --url "https://docs.google.com/spreadsheets/d/YOUR_ID/edit"
-node bin/sheetops.js add-sheet --spreadsheet-id "YOUR_ID"
-node bin/sheetops.js add-sheet --script-id "YOUR_SCRIPT_ID"
-```
-
-### Create a new Sheet from a schema
-
-```bash
-node bin/sheetops.js create-sheet --schema my-schema.json --folder "Reports" --register --name myproject
-```
-
-### Read data
-
-```bash
-node bin/sheetops.js read --project myproject --named-range "BudgetSummary"
-node bin/sheetops.js read --project myproject --sheet "Sheet1" --a1 "A1:E20"
-```
-
-### Write data
-
-All writes follow the same sequence: snapshot, dry-run, backup, apply.
-
-```bash
-node bin/sheetops.js snapshot --project myproject
-node bin/sheetops.js dry-run-patch --project myproject --patch ops/patches/fix.json
-node bin/sheetops.js backup --project myproject --reason "pre-patch"
-node bin/sheetops.js apply-patch --project myproject --patch ops/patches/fix.json --confirmed
-```
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `auth` | OAuth setup or re-auth |
-| `auth --list` | List authenticated accounts |
-| `auth --switch <email>` | Switch active account |
-| `init` | Verify tools and auth status |
-| `add-sheet` | Register a project from a Sheet URL or ID |
-| `create-sheet` | Create a new Sheet from a JSON schema |
-| `health --project` | Live healthcheck via the Sheets API |
-| `snapshot --project` | Snapshot workbook structure to disk |
-| `compare-snapshots --project` | Diff the two most recent snapshots |
-| `read --project` | Read a named range or A1 range |
-| `backup --project --reason` | Create a Drive backup |
-| `dry-run-patch --project --patch` | Preview a patch without writing |
-| `apply-patch --project --patch` | Apply a patch file (requires `--confirmed`) |
-| `validate --project` | Run validation checks |
-| `pull-script --project` | clasp pull and git commit |
-| `push-script --project` | clasp push (requires `--confirmed`) |
-| `run-script --project --function` | Execute an Apps Script function |
-| `list-functions --project` | List Apps Script functions |
-| `format-range --project` | Apply cell formatting via batchUpdate |
-| `add-tab --project --name` | Add a sheet tab |
-| `delete-tab --project --name` | Delete a sheet tab |
-| `rename-tab --project --from --to` | Rename a sheet tab |
-| `export --project --sheet` | Export data as CSV or JSON |
-| `find --project --value` | Search a value across all sheets |
-| `stats --project` | Sheet count, grid size, top sheets by row count |
-| `log-summary --project` | Recent log entries from `__AGENT_OPS_LOG` |
-| `setup-gcp [--project]` | Guide for linking Apps Script to GCP |
-
-## Sheet schema
-
-```json
+```jsonc
 {
-  "title": "My Spreadsheet",
-  "locale": "en_GB",
-  "timeZone": "Europe/London",
-  "sheets": [
-    {
-      "name": "Revenue",
-      "tabColor": "#0f9d58",
-      "frozenRows": 1,
-      "headers": ["Month", "Revenue", "Expenses", "Profit"],
-      "data": [["Jan 2026", 50000, 30000, "=C2-D2"]],
-      "headerFormat": {
-        "bold": true,
-        "backgroundColor": "#0f9d58",
-        "foregroundColor": "#FFFFFF"
-      },
-      "columnWidths": { "A": 120, "B": 110 },
-      "numberFormats": {
-        "B:D": { "type": "CURRENCY", "pattern": "\"£\"#,##0.00" }
-      },
-      "conditionalFormats": [
-        {
-          "range": "D2:D100",
-          "condition": { "type": "NUMBER_LESS", "values": [{ "userEnteredValue": "0" }] },
-          "format": { "backgroundColor": "#FFCCCC" }
-        }
-      ],
-      "namedRanges": [{ "name": "RevenueData", "a1": "A2:D100" }]
-    }
-  ]
+  "header":  { "backgroundColor": "#cfe2f3", "bold": true, "horizontalAlignment": "CENTER", "wrapStrategy": "WRAP" },
+  "banding": { "headerColor": "#cfe2f3", "firstBandColor": "#ffffff", "secondBandColor": "#eef4fb" },
+  "numberFormats": { "currency": { "type": "CURRENCY", "pattern": "£#,##0.00" }, "percent": { "type": "PERCENT", "pattern": "0.0%" } },
+  "autofit": { "maxColWidth": 320, "wrapOverCap": true },
+  "chart":   { "palette": ["#1b2f5a", "#e69f00", "#009e73", "#56b4e9"] }   // Okabe-Ito, colourblind-safe
 }
 ```
 
-## Formula support
+| Command | Does |
+|---|---|
+| `style-table` (alias `beautify`) | Header + freeze + banding + borders + alignment + number-format inference + autofit, in one shot |
+| `autofit` | Fit column widths and row heights to content; cap wide columns and wrap them |
+| `add-chart` | Embed a line / column / bar / area / scatter / pie chart from a data range |
+| `sparkline` | An inline `=SPARKLINE` per row (word-sized trend) |
+| `conditional-format` | Negatives in red, thresholds, or a heatmap |
+| `add-title` | Prepend a title band and optional subtitle |
+| `mark-cells` | Blue = input (literal), grey italic = computed (formula) |
 
-Every read returns both the displayed value and the underlying formula for each cell. Formulas are also valid as write targets — pass them as strings starting with `=` in any patch:
+Design defaults follow Tufte (no chartjunk, direct labels, bars from zero) and WCAG contrast. Full house-style guide and the post-write checklist are in [AGENTS.md](AGENTS.md) Part 9.
 
-```json
-{
-  "type": "setValues",
-  "target": { "namedRange": "ProfitCalc" },
-  "values": [["=C2-D2", "=E2/C2*100"]]
-}
-```
+## All commands
 
-When building a Sheet from scratch with `create-sheet`, use formulas in the `data` array wherever values should derive automatically from other cells.
+Run `node bin/sheetops.js help` for every flag.
 
-## Patch format
+- **Connect & inspect** — `add-sheet`, `create-sheet`, `read`, `snapshot`, `compare-snapshots`, `stats`, `find`, `export`, `health`
+- **Safe writes** — `dry-run-patch`, `apply-patch`, `backup`, `validate`, `format-range`
+- **Presentation** — `style-table`, `autofit`, `add-chart`, `sparkline`, `conditional-format`, `add-title`, `mark-cells`, `add-tab`, `delete-tab`, `rename-tab`
+- **Apps Script** — `pull-script`, `push-script`, `run-script`, `list-functions`
+- **Accounts** — `auth --list` / `--switch <email>` / `--remove <email>`
 
-```json
-{
-  "operationId": "20260101-143015-update-budget",
-  "project": "myproject",
-  "reason": "Update January budget figures after board approval",
-  "requiresApproval": true,
-  "backupRequired": true,
-  "operations": [
-    {
-      "type": "setValues",
-      "target": { "namedRange": "BudgetData" },
-      "values": [["Jan 2026", 50000, 30000]],
-      "expectedHash": "abc123...",
-      "allowFormulaOverwrite": false,
-      "confirmDestructive": false
-    }
-  ]
-}
-```
+## Formulas
 
-Full schema in `templates/patch-schema.json`.
+Formulas are first-class. Every read returns both the value and the formula behind each cell; writes accept formula strings (`"=C2-D2"`) in any patch or in `create-sheet` data. `mark-cells` makes formula-driven cells visually distinct so nobody types over them.
 
-## AgentOps.gs
-
-SheetOps installs a bridge script into each bound Apps Script project. It handles server-side locking, logging, guarded writes, and the acceptance test suite.
-
-| Function | Description |
-|----------|-------------|
-| `agent_healthcheck()` | Metadata, sheet list, named ranges |
-| `agent_snapshotWorkbook()` | Full workbook snapshot |
-| `agent_readRange(p)` | Read values, formulas, and notes — returns both layers for every cell |
-| `agent_writeRangeDryRun(p)` | Preview a write without applying it |
-| `agent_writeRange(p)` | Write with lock, hash check, and log — accepts formula strings (`=SUM(...)`) |
-| `agent_appendRows(p)` | Append rows |
-| `agent_clearRange(p)` | Clear range (requires `confirmDestructive`) |
-| `agent_deleteRows(p)` | Delete rows (requires `confirmDestructive` and backup) |
-| `agent_backupSpreadsheet(p)` | Drive copy |
-| `agent_logOperation(p)` | Append to `__AGENT_OPS_LOG` |
-| `agent_runValidation(p)` | Run declared checks |
-| `agent_acceptanceTest()` | 12-test self-test suite |
-
-## Write safety rules
+## Write safety
 
 | Condition | Requirement |
-|-----------|-------------|
-| Any write | Patch file and dry-run before applying |
-| Write over 100 cells | `confirmLarge: true` |
-| Formula cell in target range | `allowFormulaOverwrite: true` |
-| Hidden sheet target | `allowHiddenSheet: true` |
-| Protected range target | `allowProtected: true` |
-| Row deletion | `confirmDestructive: true` and a backup |
-| Apps Script push | Diff shown and `--confirmed` flag set |
-| Sharing or permission change | Not permitted |
+|---|---|
+| Any write | Patch file and dry-run first |
+| Over 100 cells | `confirmLarge: true` |
+| Formula cell in target | `allowFormulaOverwrite: true` |
+| Hidden / protected target | `allowHiddenSheet` / `allowProtected: true` |
+| Row deletion or clear | `confirmDestructive: true` and a backup |
+| Apps Script push | Diff shown and `--confirmed` |
+| Sharing / permission change | Not permitted |
 
-## Project structure
+## More
 
-```
-SheetOps/
-├── bin/
-│   └── sheetops.js          CLI
-├── lib/
-│   └── sheets-api.js        Sheets and Drive REST API client
-├── templates/
-│   ├── AgentOps.gs          Apps Script bridge template
-│   ├── patch-schema.json    Patch file JSON schema
-│   └── operating-protocol.md
-├── projects/                Per-sheet project folders (gitignored)
-│   └── <name>/
-│       ├── project.config.json
-│       ├── appsscript/      clasp clone
-│       ├── ops/patches/
-│       ├── ops/snapshots/
-│       ├── ops/backups/
-│       └── docs/
-│           ├── workbook-map.md
-│           └── apps-script-map.md
-├── logs/                    CLI logs (gitignored)
-├── SETUP.md
-└── package.json
-```
-
-## Multiple Google accounts
-
-Credentials are stored per-account in `~/.sheetops-creds.json`.
-
-```bash
-# Add an account
-node bin/sheetops.js auth --client-id YOUR_ID --client-secret YOUR_SECRET
-
-# List accounts
-node bin/sheetops.js auth --list
-
-# Switch
-node bin/sheetops.js auth --switch other@gmail.com
-```
-
-## Using with Claude
-
-SheetOps is designed to run inside [Claude Cowork](https://claude.ai). The `.plugin` bundle installs a `SKILL.md` that gives Claude the operating protocol for this CLI.
-
-Session prompt templates are in [SESSION-STARTER-TEMPLATE.md](SESSION-STARTER-TEMPLATE.md).
+- [SETUP.md](SETUP.md) — GCP project and OAuth walkthrough
+- [AGENTS.md](AGENTS.md) — the full agent operating protocol (onboarding, formula rules, presentation checklist, safety)
+- `templates/patch-schema.json` — patch file schema
+- `templates/AgentOps.gs` — optional Apps Script bridge (server-side locking, logging, guarded writes, self-test)
 
 ## License
 
-[MIT](LICENSE) - Anneo22
+[MIT](LICENSE) — Anneo22

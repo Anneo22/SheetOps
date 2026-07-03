@@ -1,5 +1,5 @@
 ---
-Modified: 2026-07-03T09:59
+Modified: 2026-07-03T10:34
 ---
 # SheetOps — Agent Operating Protocol
 
@@ -242,6 +242,9 @@ node bin/sheetops.js push-script --project PROJECT_NAME --confirmed
 | `style-table --project --sheet` | One-shot beautify from the theme (alias `beautify`) |
 | `add-chart --project --sheet --data-range` | Embed a line/column/bar/pie chart |
 | `conditional-format --project --sheet --a1` | Add a conditional-format rule (negatives/thresholds/heatmap) |
+| `add-title --project --sheet --title` | Prepend a navy title band (+ optional subtitle) |
+| `sparkline --project --sheet --source --target` | Inline `=SPARKLINE` per row |
+| `mark-cells --project --sheet --a1` | Mark input (literal) vs computed (formula) cells |
 | `add-tab --project --name` | Add a sheet tab |
 | `delete-tab --project --name` | Delete a sheet tab |
 | `rename-tab --project --from --to` | Rename a sheet tab |
@@ -298,6 +301,9 @@ Seed palette (formalised from the finance workbook; contrast- and colourblind-ch
 - `style-table --project P --sheet S` (alias `beautify`) — one-shot: header treatment + freeze + banding + header border + per-column alignment + number-format inference + autofit, all from the theme.
 - `add-chart --project P --sheet S --data-range A1:C13 --type line|column|bar|pie` — embed a chart (first column = labels).
 - `conditional-format --project P --sheet S --a1 R --rule negative-red|less-than|greater-than|heatmap`.
+- `add-title --project P --sheet S --title "…" [--subtitle "…"]` — prepend a navy title band; run **after** `style-table` (it re-freezes to cover the band).
+- `sparkline --project P --sheet S --source B2:M13 --target N [--type column]` — an inline `=SPARKLINE` per row (word-sized trend).
+- `mark-cells --project P --sheet S --a1 R` — blue = input (literal), grey italic = computed (formula), so it's obvious what's safe to edit.
 
 ### Post-write presentation checklist
 
