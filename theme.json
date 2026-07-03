@@ -36,7 +36,7 @@
     "heatmap": { "min": "#f4cccc", "mid": "#ffffff", "max": "#b6d7a8" }
   },
 
-  "sparkline": { "type": "line", "color": "#1b2f5a", "negColor": "#c00000" },
+  "sparkline": { "type": "column", "color": "#56b4e9", "highColor": "#009e73", "lowColor": "#e69f00", "negColor": "#c00000" },
 
   "marking": {
     "input":    { "foregroundColor": "#1155cc" },

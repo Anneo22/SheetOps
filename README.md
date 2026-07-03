@@ -1,5 +1,5 @@
 ---
-Modified: 2026-07-03T10:40
+Modified: 2026-07-03T10:55
 ---
 # SheetOps
 
@@ -88,6 +88,14 @@ Formulas are first-class. Every read returns both the value and the formula behi
 | Row deletion or clear | `confirmDestructive: true` and a backup |
 | Apps Script push | Diff shown and `--confirmed` |
 | Sharing / permission change | Not permitted |
+
+## Where it runs, and how agents use it
+
+SheetOps is a plain Node.js CLI (Node 18+), so it runs anywhere Node runs: a terminal, a script, CI, or cron. Because it is just a shell command, it also drops into any coding agent that can run a shell, including Claude Code, Codex, Cursor, and Claude Cowork. Nothing about it is tied to one host.
+
+Two files carry the same operating protocol, one per agent convention: **CLAUDE.md** (read by Claude Code) and **AGENTS.md** (the cross-tool convention read by Codex, Cursor, and others). They are kept byte-identical on purpose, so whichever agent picks it up follows the same onboarding, formula, presentation, and safety rules.
+
+`sheetops.plugin` bundles that protocol as a loadable skill, so a host that supports plugins or skills (such as Claude Code or Claude Cowork) can load the rules automatically instead of you pasting them. Cold-start prompt templates are in [SESSION-STARTER-TEMPLATE.md](SESSION-STARTER-TEMPLATE.md).
 
 ## More
 
