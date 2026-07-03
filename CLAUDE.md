@@ -1,5 +1,5 @@
 ---
-Modified: 2026-07-03T10:57
+Modified: 2026-07-03T11:15
 ---
 # SheetOps — Agent Operating Protocol
 
@@ -320,3 +320,14 @@ After ANY data write (`create-sheet`, `apply-patch`, append, manual write), run 
 **Chart chooser:** time/trend → line · compare categories → column (few) or bar (many / long labels, sorted) · parts of a whole (2-3) → pie, else bar · relationship → scatter · per-row inline trend → `=SPARKLINE` · exact lookups / many rows / mixed units → leave as a table.
 
 Number-format inference is heuristic (header keywords + value sampling). Verify it on the readback and override per column when it guesses wrong (e.g. an ID column that looks numeric but must stay plain).
+
+### Design standard (IBCS / Tufte / Knaflic)
+
+The theme is built to this standard; keep to it when overriding.
+
+1. **Grey by default, colour to carry meaning.** Neutral cells; colour is opt-in and must encode something. Against a neutral table, one accent pops.
+2. **Same entity, same colour, everywhere** (IBCS *UNIFY*). A series keeps its colour across table, chart, and sparkline. A colour change must signal a data change, never decoration.
+3. **≤ 6 colours in one view.** Beyond that, grey the rest and highlight one. Never a per-column rainbow.
+4. **Sequential time is shade, not hue.** If periods need colour, one hue light→dark (order is meaningful); distinct per-month hues are chartjunk.
+5. **Colour semantics reserved:** red = negative (baked into the number formats), the brand accent = the highlighted item only. Sparklines stay muted with one accent on the latest bar (`lastColor`), not every bar.
+6. **Let whitespace and alignment carry structure**, not borders: right-aligned numerics, consistent decimals per column, a muted header, banding, a single header rule, gridlines off.

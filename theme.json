@@ -14,12 +14,12 @@
   "alignment": { "number": "RIGHT", "currency": "RIGHT", "percent": "RIGHT", "integer": "RIGHT", "decimal": "RIGHT", "date": "CENTER", "code": "CENTER", "boolean": "CENTER", "text": "LEFT" },
 
   "numberFormats": {
-    "currency":  { "type": "CURRENCY", "pattern": "£#,##0.00" },
-    "currency0": { "type": "CURRENCY", "pattern": "£#,##0" },
-    "percent":   { "type": "PERCENT",  "pattern": "0.0%" },
+    "currency":  { "type": "CURRENCY", "pattern": "£#,##0.00;[Red]-£#,##0.00" },
+    "currency0": { "type": "CURRENCY", "pattern": "£#,##0;[Red]-£#,##0" },
+    "percent":   { "type": "PERCENT",  "pattern": "0.0%;[Red]-0.0%" },
     "date":      { "type": "DATE",     "pattern": "yyyy-mm-dd" },
-    "integer":   { "type": "NUMBER",   "pattern": "#,##0" },
-    "decimal":   { "type": "NUMBER",   "pattern": "#,##0.00" }
+    "integer":   { "type": "NUMBER",   "pattern": "#,##0;[Red]-#,##0" },
+    "decimal":   { "type": "NUMBER",   "pattern": "#,##0.00;[Red]-#,##0.00" }
   },
 
   "autofit": { "maxColWidth": 320, "minColWidth": 60, "wrapOverCap": true },
@@ -36,7 +36,7 @@
     "heatmap": { "min": "#f4cccc", "mid": "#ffffff", "max": "#b6d7a8" }
   },
 
-  "sparkline": { "type": "column", "color": "#56b4e9", "highColor": "#009e73", "lowColor": "#e69f00", "negColor": "#c00000" },
+  "sparkline": { "type": "column", "color": "#aac4e2", "lastColor": "#1b2f5a", "negColor": "#c00000" },
 
   "marking": {
     "input":    { "foregroundColor": "#1155cc" },

@@ -1304,11 +1304,13 @@ async function cmdSparkline(args) {
   const theme = loadTheme(projectName);
   const r = await A.addSparklines(spreadsheetId, {
     sheetTitle, sourceRange, targetCol, theme,
-    type:      args["type"],
-    color:     args["color"],
-    highColor: args["high-color"],
-    lowColor:  args["low-color"],
-    negColor:  args["neg-color"]
+    type:       args["type"],
+    color:      args["color"],
+    highColor:  args["high-color"],
+    lowColor:   args["low-color"],
+    firstColor: args["first-color"],
+    lastColor:  args["last-color"],
+    negColor:   args["neg-color"]
   });
   ok(`Wrote ${r.count} ${r.type} sparkline(s) to ${r.targetRange}.`);
 }
@@ -1526,7 +1528,8 @@ ${C.bold}Presentation & visualization:${C.reset} (theme-driven — reads theme.j
                 --title "text" [--subtitle "text"] [--width N]
   sparkline     --project --sheet <name>    Inline =SPARKLINE per row
                 --source B2:M13 --target N   [--type line|column|bar|winloss]
-                [--color #hex] [--high-color #hex] [--low-color #hex] [--neg-color #hex]
+                [--color #hex] [--last-color #hex] [--first-color #hex]
+                [--high-color #hex] [--low-color #hex] [--neg-color #hex]
   mark-cells    --project --sheet <name>    Mark number inputs (blue) vs formulas (grey italic)
                 --a1 <range> [--include-text]  (--include-text also colours text labels)
 
