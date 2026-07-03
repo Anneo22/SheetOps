@@ -1,6 +1,3 @@
----
-Modified: 2026-07-03T10:55
----
 # SheetOps
 
 A local control plane for AI agents working with Google Sheets. Reads and writes go through the Sheets API, never browser automation. Every write is gated by a patch, a dry-run, and a backup. And every sheet it builds or touches comes out **well-formatted by default** from a single design theme.
