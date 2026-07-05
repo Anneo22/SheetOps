@@ -1,6 +1,10 @@
 # Dependencies
 node_modules/
 
+# Claude<>Codex hand-off journal (can carry cross-project data from other Sheets
+# operated via this CLI, e.g. a private finance workbook; never publish)
+CHANGES.log
+
 # Per-user project data (contains spreadsheet IDs, tokens, personal data)
 projects/
 
