@@ -513,9 +513,12 @@ async function cmdBackup(args) {
   hdr(`Backup: ${name}`);
   try {
     const pc     = loadProjectConfig(name);
-    const result = await api().backupSpreadsheet(sid, pc.spreadsheetName || name, reason);
+    const result = await api().backupSpreadsheet(sid, pc.spreadsheetName || name, reason,
+      { folderId: pc.backupFolderId, retain: pc.backupRetain });
     ok(`Backup: ${result.backupName}`);
     ok(`Drive ID: ${result.backupId}`);
+    if (result.pruned && result.pruned.length)
+      ok(`Retention: trashed ${result.pruned.length} old backup(s), kept newest ${pc.backupRetain}`);
     const cfgPath = path.join(projectDir(name), "project.config.json");
     const cfg = readJson(cfgPath);
     cfg.lastBackup = new Date().toISOString(); cfg.lastBackupId = result.backupId;
@@ -567,8 +570,10 @@ async function cmdApplyPatch(args) {
     info("Taking backup…");
     try {
       const pc = loadProjectConfig(name);
-      const bk = await A.backupSpreadsheet(sid, pc.spreadsheetName || name, "pre-patch: " + patch.operationId);
+      const bk = await A.backupSpreadsheet(sid, pc.spreadsheetName || name, "pre-patch: " + patch.operationId,
+        { folderId: pc.backupFolderId, retain: pc.backupRetain });
       ok("Backup: " + bk.backupName);
+      if (bk.pruned && bk.pruned.length) ok(`Retention: trashed ${bk.pruned.length} old backup(s)`);
     } catch(e) { warn("Backup failed: " + e.message); }
   }
   for (let i = 0; i < patch.operations.length; i++) {
