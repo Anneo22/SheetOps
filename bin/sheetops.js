@@ -70,7 +70,15 @@ function projectDir(name)  { return path.join(PROJECTS, name); }
 function loadProjectConfig(name) {
   const p = path.join(projectDir(name), "project.config.json");
   if (!fs.existsSync(p)) { err(`Project '${name}' not found`); process.exit(1); }
-  return readJson(p);
+  const cfg = readJson(p);
+  // A backup copy must never land beside the live spreadsheet — Drive puts a copy in the
+  // source's own folder when no destination is given, which silently litters the folder the
+  // user actually browses. A project may still override the destination; if it does not, fall
+  // back to the workspace-wide default so a newly registered project cannot reintroduce this.
+  const root = fs.existsSync(CONFIG_FILE) ? readJson(CONFIG_FILE) : {};
+  if (!cfg.backupFolderId && root.defaultBackupFolderId) cfg.backupFolderId = root.defaultBackupFolderId;
+  if (cfg.backupRetain == null && root.defaultBackupRetain != null) cfg.backupRetain = root.defaultBackupRetain;
+  return cfg;
 }
 
 function safeName(raw) {
@@ -513,6 +521,9 @@ async function cmdBackup(args) {
   hdr(`Backup: ${name}`);
   try {
     const pc     = loadProjectConfig(name);
+    if (!pc.backupFolderId)
+      warn("No backupFolderId for this project and no defaultBackupFolderId in sheetops.config.json — " +
+           "the copy will land in the spreadsheet's OWN folder. Set defaultBackupFolderId to stop that.");
     const result = await api().backupSpreadsheet(sid, pc.spreadsheetName || name, reason,
       { folderId: pc.backupFolderId, retain: pc.backupRetain });
     ok(`Backup: ${result.backupName}`);
