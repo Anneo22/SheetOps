@@ -43,3 +43,6 @@ check-*.sh
 # Temp files
 *.tmp
 *.bak
+
+# Agent protocol lives in CLAUDE.md; this local copy is untracked (publish-audit: process-file)
+AGENTS.md
