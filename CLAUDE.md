@@ -321,6 +321,19 @@ After ANY data write (`create-sheet`, `apply-patch`, append, manual write), run 
 
 Number-format inference is heuristic (header keywords + value sampling). Verify it on the readback and override per column when it guesses wrong (e.g. an ID column that looks numeric but must stay plain).
 
+### Appending a column or row to an existing styled table
+
+When you ADD data to a table that already has a house style (banding, a coloured header band, per-value range flags, number formats), you own making the new data look native. A raw append is a defect, even when the values are right.
+
+1. **Read the neighbour's real formatting first**, don't guess: `getSheetVisuals` for conditional-format rules + banded ranges, and a `spreadsheets.get` with `includeGridData` for the adjacent column's per-cell `backgroundColor`, `numberFormat`, alignment, and the header cell. Colour coding is often **manual cell backgrounds**, not conditional formatting — check which before assuming either.
+2. **Replicate** the number format, header band, banding and alignment onto the new column/row. `copyPaste` PASTE_FORMAT breaks on frozen rows / merged cells (`"can't paste merges that cross the boundary of a frozen region"`) — fall back to per-row `updateCells` built from the neighbour's read.
+3. **Match the new column's WIDTH** to its neighbour (`updateDimensionProperties`, `dimension:"COLUMNS"`). A default-narrow 60px column beside 90/349px siblings is an obvious mismatch and wraps the header ugly.
+4. **Extend the table's full-width bands and section bars across the new column** — title strip, sub-bands, and every `Category`/section header row. These are usually **merges** ending at the old last column. You typically **can't extend the merge** to the new column because a merge that already spans the frozen column A hits `"can't merge frozen and non-frozen columns"` (and the whole batchUpdate is atomic — one bad request rolls back everything). Instead, read the merge origin's `backgroundColor` per band row and **paint that colour into the new column's cells** so the bands read as continuous. Also confirm the neighbour's banding vertical extent and match it (don't extend past where the sibling stops).
+5. **Re-derive per-value flags for the NEW data; never blind-copy the neighbour's flags.** An out-of-range highlight reflects *that column's* value against its range. Copying the previous column's red/orange onto a blank or in-range new cell is a correctness bug (it once put an orange "low ferritin" flag on a July cell that was never tested).
+6. **Verify by reading the applied format back** — widths, per-cell backgrounds, number formats — and screenshot when the look matters, not just "the request returned ok".
+
+Rule of thumb: touching a sheet means adapting it **as a whole** — width, bands, banding, header, flags, to the full extent of the table — never leave new data as the one unstyled thing in a styled table.
+
 ### Design standard (IBCS / Tufte / Knaflic)
 
 The theme is built to this standard; keep to it when overriding.
